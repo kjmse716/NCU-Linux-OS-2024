@@ -1,16 +1,6 @@
----
-title: Add a system call that get physical addr. from virtual addr.
-
----
-
 # <font color="#F7A004">Intro</font>
-第40組:
-```
-113522008 陳國誌
-113522053 蔡尚融
-李秉叡
-```
-**<font size = 4>2024 Fall NCU Linux OS Project 1</font>**
+
+**<font size = 4>2024 Fall NCU Linux OS Project 1</font>**  
 
 
 * Add a system call that get physical addresses from virtual addresses
@@ -18,15 +8,14 @@ title: Add a system call that get physical addr. from virtual addr.
 * 使用Copy on Write 機制來驗證system call 正確呼叫  
 * 介紹 Demand Paging 在 memory 中的使用時機  
 
+Demo問題可參考[這篇](https://hackmd.io/@gary7102/ByQDR51M1e)，[github](https://github.com/gary7102/Linux-add-a-system-call.git)，好讀版[hackmd](https://hackmd.io/@gary7102/BkMu4HKk1l)
+
 **<font size = 4>Environment</font>**
 ```
 OS: Ubuntu 22.04
 ARCH: X86_64
 Kernel Version: 5.15.137
 ```
-
-# <font color="#F7A004">Build Kernel</font>  
-
 
 
 
@@ -247,7 +236,7 @@ static inline p4d_t *p4d_offset(pgd_t *pgd, unsigned long address)
 ## Page Table walk 實作
 
 新增一個檔案叫 `project1.c`，路徑為 `kernel/project1.c`
-:::spoiler <font color = "blue">範例</font>
+:::spoiler <font color = green>範例</font>
 
 ```c=1
 #include <linux/syscalls.h>
@@ -371,7 +360,7 @@ pgd = pgd_offset(current->mm, vaddr);
 * 將結果與 `511`（`PTRS_PER_PGD - 1`）做 bitwise `&`，確保index在有效範圍內
 
 得到的結果即為 virtual address `a` 的 `pgd_index`，
-並且可以依此類推到 `p4d_offset`、`pud_index`、`pmd_index`的計算方法
+並且可以依此類推到 `p4d_index`、`pud_index`、`pmd_index`及`pte_index`的計算方法
 :::
 
 ### 第二層轉換P4D(p4d僅5 level轉換時啟用，此處會值接回傳傳入的pgd *)
@@ -410,7 +399,7 @@ static inline pud_t *pud_offset(p4d_t *p4d, unsigned long address)
         return p4d_pgtable(*p4d) + pud_index(address);
 }
 ```
- / arch / x86 / include / asm / pgtable.h
+
 ![image](https://hackmd.io/_uploads/SJlWDG0bkx.png)
 
 
@@ -476,29 +465,7 @@ static inline pmd_t *pmd_offset(pud_t *pud, unsigned long address)
 
 
 這裡因為我們`CONFIG_PGTABLE_LEVELS = 4`，故執行的是363行而不是375行的`native_pud_val()`
-:::success
-### <font color = "#008000">What is `pud_pgtable(*pud)`?</font>
 
-根據 [bootlin](https://elixir.bootlin.com/linux/v5.15.137/source/arch/arc/include/asm/pgtable-levels.h#L136)
-```c
-#define pud_pgtable(pud)	((pmd_t *)(pud_val(pud) & PAGE_MASK))
-```
-這個Macro的作用是回傳一個 `pmd_t *`的structure pointer，  
-指向`pmd`（下一層）的page table base address。  
-
-其中：
-
-* `pud_val()`： 根據 [bootlin](https://elixir.bootlin.com/linux/v5.15.137/source/arch/arc/include/asm/page.h#L50) 
-```c
-#define pud_val(x)      	((x).pud)
-```
-`pud_t` 是一個 `struct`，`.pud` 是其內部的成員，用來存取這個page的實際值
-* `PAGE_MASK` 一樣是`0xFFFFFFFFFFFFF000`因為page size 為 4KB
-
-因此`pud_val(pud)`去`pud` page table中存值並且和`PAGE_MASK`做`&` 取得`pmd` page table base address ，並且回傳以`pmd_t *`的struct  
-
-以此類推到`p4d_pgtable()`, `pmd_page_vaddr()`
-:::
 
 ###  第五層轉換PTE 
 >目標 : 使用*pmd與pte index找到之PTE entry的virtual address
@@ -534,12 +501,11 @@ static inline pte_t *pte_offset_kernel(pmd_t *pmd, unsigned long address)
 >目標 : 由*pte與pte index找到pte entry中存放的physical address
 
 **<font size = 4>程式碼:</font>**
-```c
+```c=64
 page_addr = pte_val(*pte) & PTE_PFN_MASK;
 page_offset = vaddr & ~PAGE_MASK;
 paddr = page_addr | page_offset;
 ```
-
 
 **<font size = 4>trace code:</font>**
 
@@ -678,7 +644,9 @@ system call 對應的實作，kernel 中通常會用 sys 開頭來代表 system 
 這定義了我們system call的prototype，`asmlinkage`代表我們的參數都可以在stack裡取用，
 當 assembly code 呼叫 C function，並且是以 stack 方式傳參數時，在 C function 的 prototype 前面就要加上 `asmlinkage`
 
+# <font color="#F7A004">Compile Kernel</font>
 
+請參考 [add a system call](https://hackmd.io/aist49C9R46-vaBIlP3LDA?view)
 
 # <font color="#F7A004">Copy on Write</font>
 
@@ -704,7 +672,8 @@ system call 對應的實作，kernel 中通常會用 sys 開頭來代表 system 
 ## <font color = "green">case 1:</font> Array store in bss segment 
 ```c
 // global variable
-int a[2000000];   //store in bss segment same as  int a[2000000] = {0}; 
+int a[2000000];   // store in bss segment,
+                  // same as  int a[2000000] = {0}; 
 ```
 **執行結果:**  
 ![image](https://hackmd.io/_uploads/Hy2hMHjZJg.png)
@@ -740,7 +709,7 @@ a[15352] = 1;     // occur page fault, load to phy_mem
 ```
 
 因為page size = 4KB，且一個int 4 bytes，而我們使用64位元架構，
-因此page table entries size = 8 bytes(存兩個array element = 8 bytes)，因此：$$\dfrac{4KB}{8B} = \dfrac{2^{12}}{2^3} = 2^9 = 512$$
+因此page table entries size = 8 bytes(存兩個int element = 8 bytes)，因此：$$\dfrac{4KB}{8B} = \dfrac{2^{12}}{2^3} = 2^9 = 512$$
 證明也是64位元架構page table entries 為512個
 
 由此證明老師上課講解的內容
@@ -768,14 +737,16 @@ BSS segment 存放的資料為 **uninitialized global variable (initialized with
 ```
 // global variables
 
-int a[100];        // bss segment
-int a[100] = {0};  // bss segment
-int a[100] = {1};  // Data segment
+int a[100];               // bss segment
+int a[100] = {0};         // bss segment
+static int global_var2;   // bss segment
+int a[100] = {1};         // Data segment
 ```
 
 
 ## <font color=" #008000">mm_struct</font>
-**<font color = "#0000ff"><font size = 4>What is `mm_struct`?</font></font>**
+
+**<font size = 5>What is `mm_struct`?</font>**
 
 task_struct 被稱為 process descriptor，因為其記錄了這個 process所有的context(ex: PID, scheduling info)，其中有一個被稱為 memory descriptor的結構 `mm_struct`，記錄了Linux視角下管理process address的資訊(ex: page tables)。  
 ![30528e172c325228bf23dec7772f0c73](https://hackmd.io/_uploads/SkgMiSY1Jg.png)  
@@ -786,20 +757,27 @@ task_struct 被稱為 process descriptor，因為其記錄了這個 process所�
 By assigning `current->mm` to this pointer, now can access to the memory-related information (ex: page tables) for the process that is running the system call.
 
 
-**<font color = "#0000ff"><font size = 4>What is `task_struct`?</font></font>**  
+**<font size = 5>What is `task_struct`?</font>**  
 
-根據 [bootlin](https://elixir.bootlin.com/linux/v5.15.137/source/include/linux/sched.h#L721) `task_struct` is a key data structure in the Linux kernel that represents a process or thread. It holds all the information related to a process.   
+根據 [bootlin](https://elixir.bootlin.com/linux/v5.15.137/source/include/linux/sched.h#L721) 
 
-其中比較重要的有:  
+在 Linux 中，Process Descriptor的data structure是 `task_struct`，每個正在運行或等待的process都對應一個 `task_struct`  
 
-`pid_t pid`: The process ID.  
-`pid_t tgid`: The thread group ID, which is the same as pid for the main thread of a process.  
-`struct mm_struct *mm`: Pointer to the memory descriptor, which contains information about the process's memory mappings.  
-`struct task_struct *parent`: Pointer to the parent process.  
-`struct list_head children`: List head for tracking child processes.  
-`struct list_head sibling`: List head for linking to sibling processes.  
-`struct files_struct *files`: Pointer to the file descriptor table.  
-`unsigned int flags`: Flags that represent various attributes and settings of the process.  
+其中比較常見的有:  
+```c
+struct task_struct {
+    pid_t pid;                  // process ID
+    pid_t tgid;                 // thread ID
+    long state;                 // process state
+    struct mm_struct *mm;       // memory descriptor
+    struct files_struct *files; // 文件描述符
+    struct fs_struct *fs;       // 文件系統信息
+    int prio;                   // 優先級
+    struct cred *cred;          // 權限信息
+    struct signal_struct *signal; // 信號處理
+    // ... 
+};
+```
 
 
 ## <font color=" #008000">SYSCALL_DEFINE</font>
