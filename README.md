@@ -1,13 +1,8 @@
----
-title: Add a system call that get physical addr. from virtual addr.
-
----
-
 # <font color="#F7A004">Intro</font>
-第40組:
+第40組    組員:
 ```
 113522008 陳國誌
-113522053 蔡尚融
+113522053蔡尚融
 李秉叡
 ```
 **<font size = 4>2024 Fall NCU Linux OS Project 1</font>**
@@ -131,7 +126,9 @@ line 17傳入`&input`及`&output`，
 
 
 **<font size = 4>執行結果 :</font>**  
-![image](https://hackmd.io/_uploads/HyF41Ysl1g.png)  
+![image](https://hackmd.io/_uploads/rJryiCUMyx.png)  
+
+
 
 system call 正確呼叫且輸出計算結果
 
@@ -152,7 +149,8 @@ Page table 一般來說可以分為兩種結構，32 bit cpu使用4-level(10-10-
     
 使用4-level page table 為例:  
 
-![linux_paging](https://hackmd.io/_uploads/rkIiRAVxJx.jpg)
+![image](https://hackmd.io/_uploads/r1QWi08zkg.png)
+
 
 
 可以看到Page table的base address 是存放在 CR3（又稱 PDBR，page directory base register）這個register，存放的是**physical address**。但我們需要的是他的virtual address，因此，使用 `task_struct->mm->pgd` 內儲存的則是 Process Global Directory(PGD) 的virtual address，
@@ -342,12 +340,14 @@ pgd = pgd_offset(current->mm, vaddr);
 
 **<font size = 4>trace code:</font>**
 
-![image](https://hackmd.io/_uploads/Bku2LGAb1e.png)
+![image](https://hackmd.io/_uploads/HkAri08Myx.png)
 
-![image](https://hackmd.io/_uploads/S11p8fAWJg.png)
+![image](https://hackmd.io/_uploads/HJPIsCUzyx.png)
 
 
-由`current->mm->pgd`找出PGD的base address再加上`pgd_index` 計算出pgd entry的虛擬位置，回傳指標。
+
+由current->mm->pgd中的虛擬記憶體位置計算出pgd entry的虛擬位置，回傳指標。
+
 
 
 :::success
@@ -385,16 +385,20 @@ p4d = p4d_offset(pgd, vaddr);
 `//arch/x86/include/asm/pgtable.h line 926)`
 
 
-![image](https://hackmd.io/_uploads/HyqCLfAWke.png)
+![image](https://hackmd.io/_uploads/ByKdi0Iz1e.png)
 
 
-其中`pgtable_l5_enabled()` check whether 5-level page table is enabled。因此如果系統使用的是4-level，則無需存取 `p4d_t`，且直接回傳以`(p4d_t*) pgd`，  
-也就是說在4-level下 `pgd = p4d`  
-相同道理，3-level下 `pgd = p4d = pud`
 
+其中pgtable_l5_enabled()check whether 5-level page table is enabled。因此如果系統使用的是4-level，則無需存取 p4d_t，且直接回傳以(p4d_t*) pgd，
+也就是說在4-level下 pgd = p4d
+相同道理，3-level下 pgd = p4d = pud
+
+
+
+>*p4d == *pgd
 
 ###  第三層轉換PUD 
->目標 : 使用*pgd與pud index找到之PUD entry的virtual address
+>目標 : 回傳使用*pgd與pud index找到之PUD entry的virtual address
 
 **<font size = 4>程式碼:</font>**
 ```c
@@ -410,41 +414,42 @@ static inline pud_t *pud_offset(p4d_t *p4d, unsigned long address)
         return p4d_pgtable(*p4d) + pud_index(address);
 }
 ```
- / arch / x86 / include / asm / pgtable.h
-![image](https://hackmd.io/_uploads/SJlWDG0bkx.png)
+` / arch / x86 / include / asm / pgtable.h`
+![image](https://hackmd.io/_uploads/Hy4ci0IzJg.png)
+![image](https://hackmd.io/_uploads/ryDoiAIzJl.png)
 
-
-![image](https://hackmd.io/_uploads/BynZPfR-ye.png)
 
 這裡先用macro判斷CONFIG_PGTABLE_LEVELS是否大於4(p4d table是否有真正使用)
 在我們情況下使用4 level轉換，故實際function為下方349行而非337行。
 
- `/ arch / x86 / include / asm / pgtable_types.h`
-![image](https://hackmd.io/_uploads/Hkym9MRZJx.png)
+` / arch / x86 / include / asm / pgtable_types.h`
+![image](https://hackmd.io/_uploads/B1oRoRIGye.png)
 
 
-![image](https://hackmd.io/_uploads/ry2Q9fAZye.png)
+![image](https://hackmd.io/_uploads/H19yhC8zJx.png)
 
 
-**此處的查詢使用的pgd entry為第一層轉換出來(p4d=pgd)，透過virtual address來指向一個pgd entry的pointer**
+**此處的查詢使用的pgd entry為第一層轉換出來(p4d=pgd)，透過virtual address來指向一個pgd entry的pointer
 
 
 
 
 
-### __va() trace code:
+### VA__() trace code:
 
 `/ arch / x86 / include / asm / page.h`
 
-![image](https://hackmd.io/_uploads/ryNswz0Zyg.png)
+![image](https://hackmd.io/_uploads/H1Cx2CUGkx.png)
 
 
-透過將physical address加上`PAGE_OFFSET`，也就是加上kernel space virtual address的啟始位置藉此得到透過偏移量轉換的virtual address.
 
-![image](https://hackmd.io/_uploads/BJDTAzA-yx.png)
+透過將physical address加上PAGE_OFFSET，也就是加上kernel space virtual address的啟始位置藉此得到透過偏移量轉換的virtual address.
+![image](https://hackmd.io/_uploads/BJhb3A8Gke.png)
+
+
 
 ###  第四層轉換PMD 
->目標 : 使用*pud與pmd index找到之PMD entry的virtual address
+>目標 : 回傳使用*pud與pmd index找到之PMD entry的virtual address
 
 **<font size = 4>程式碼:</font>**
 ```c
@@ -465,28 +470,23 @@ static inline pmd_t *pmd_offset(pud_t *pud, unsigned long address)
 }
 #define pmd_offset pmd_offset
 ```
-![image](https://hackmd.io/_uploads/HyCovzRWke.png)
+![image](https://hackmd.io/_uploads/SJx7nC8z1g.png)
+
 
 
 這裡傳入的pud是透過virtual address指向一個pud entry
-![image](https://hackmd.io/_uploads/ryxTvMAZyx.png)
+![image](https://hackmd.io/_uploads/BJhm2C8fyx.png)
+
 
 可以看到這裡一樣會檢查判斷CONFIG_PGTABLE_LEVELS是否大於3(pud table是否有啟用)
-![image](https://hackmd.io/_uploads/Bk3Tvf0bJg.png)
+![image](https://hackmd.io/_uploads/ByLV3CLf1e.png)
 
 
-這裡因為我們`CONFIG_PGTABLE_LEVELS = 4`，故執行的是363行而不是375行的`native_pud_val()`
+
+這裡因為我們CONFIG_PGTABLE_LEVELS>3，固執行的是363行而不是375行的native_pud_val()
 :::success
-### <font color = "#008000">What is `pud_pgtable(*pud)`?</font>
+### <font color = "#008000">What is `pud_val()`?</font>
 
-根據 [bootlin](https://elixir.bootlin.com/linux/v5.15.137/source/arch/arc/include/asm/pgtable-levels.h#L136)
-```c
-#define pud_pgtable(pud)	((pmd_t *)(pud_val(pud) & PAGE_MASK))
-```
-這個Macro的作用是回傳一個 `pmd_t *`的structure pointer，  
-指向`pmd`（下一層）的page table base address。  
-
-其中：
 
 * `pud_val()`： 根據 [bootlin](https://elixir.bootlin.com/linux/v5.15.137/source/arch/arc/include/asm/page.h#L50) 
 ```c
@@ -501,7 +501,7 @@ static inline pmd_t *pmd_offset(pud_t *pud, unsigned long address)
 :::
 
 ###  第五層轉換PTE 
->目標 : 使用*pmd與pte index找到之PTE entry的virtual address
+>目標 : 回傳使用*pmd與pte index找到之PTE entry的virtual address
 
 **<font size = 4>程式碼:</font>**
 ```c
@@ -523,7 +523,8 @@ static inline pte_t *pte_offset_kernel(pmd_t *pmd, unsigned long address)
 ```
 
 `/ arch / x86 / include / asm / pgtable.h`
-![image](https://hackmd.io/_uploads/BJ2CvfRb1x.png)
+![image](https://hackmd.io/_uploads/S1q9hC8Mkl.png)
+
 
 
 
@@ -543,12 +544,14 @@ paddr = page_addr | page_offset;
 
 **<font size = 4>trace code:</font>**
 
-![image](https://hackmd.io/_uploads/Syay_GAZ1e.png)
-
-![image](https://hackmd.io/_uploads/SkQlOGAWJx.png)
+![image](https://hackmd.io/_uploads/S1Jn20LMkg.png)
 
 
-這裡透過的`pte_val()`得到pte table entry中的內容。
+![image](https://hackmd.io/_uploads/SJO220IMye.png)
+
+
+
+這裡透過的pte_val()得到pte table entry中的內容。
 
 
 
@@ -586,14 +589,17 @@ int main()
 ```
 
 **<font size = 4>結果:</font>**  
-![image](https://hackmd.io/_uploads/HyFZkBsZkx.png)
+![image](https://hackmd.io/_uploads/ryrTh0Lzkx.png)
+
 
 
 **<font size = 4>使用dmesg來查看kernel內的訊息</font>**  
 
-![image](https://hackmd.io/_uploads/ryaNJriWkl.png)
+![image](https://hackmd.io/_uploads/r1yA2A8f1x.png)
 
-![image](https://hackmd.io/_uploads/r1iZv-IWJe.png)
+
+![image](https://hackmd.io/_uploads/HyFChRIMJl.png)
+
 
 
 可以看到virtual address = `0x7fffd5bd1544`，  
@@ -665,7 +671,8 @@ system call 的名字
 system call 對應的實作，kernel 中通常會用 sys 開頭來代表 system call 的實作
 
 `syscall_64.tbl` 這個檔案會在編譯階段被讀取後轉為 header file 檔案位於: `arch/x86/include/generated/asm/syscalls_64.h`：  
-![image](https://hackmd.io/_uploads/rJE4StogJl.png)
+![image](https://hackmd.io/_uploads/SJmlpAIGJl.png)
+
 
 
 **<font size = 5>3. Modified `syscalls.h`</font>**
@@ -673,7 +680,8 @@ system call 對應的實作，kernel 中通常會用 sys 開頭來代表 system 
 將 syscall 的原型添加進檔案 (`#endif` 之前)
 路徑為: `include/linux/syscalls.h`  
 
-![image](https://hackmd.io/_uploads/HyH4IFoeJg.png)
+![image](https://hackmd.io/_uploads/ryqxT0LG1g.png)
+
 
 這定義了我們system call的prototype，`asmlinkage`代表我們的參數都可以在stack裡取用，
 當 assembly code 呼叫 C function，並且是以 stack 方式傳參數時，在 C function 的 prototype 前面就要加上 `asmlinkage`
@@ -684,7 +692,8 @@ system call 對應的實作，kernel 中通常會用 sys 開頭來代表 system 
 
 * **<font size = 4>Copy on write:</font>** allows multiple processes to share the same physical memory until one intends to modify it.
 
-![螢幕擷取畫面 2024-11-08 154515](https://hackmd.io/_uploads/Hy8Qzrsb1l.png)
+![image](https://hackmd.io/_uploads/B1KG60LGyx.png)
+
 
 
 可以看到程式執行時，parent process、child process中 `global_a` 的physical memory都是共用的，直到`global_a`被改動之後，os會分配新的physical memory 給改動的process，也因此驗證了system call 確實有正確呼叫
@@ -707,7 +716,8 @@ system call 對應的實作，kernel 中通常會用 sys 開頭來代表 system 
 int a[2000000];   //store in bss segment same as  int a[2000000] = {0}; 
 ```
 **執行結果:**  
-![image](https://hackmd.io/_uploads/Hy2hMHjZJg.png)
+![image](https://hackmd.io/_uploads/H1jmaCIMJg.png)
+
 
 可以看到，存放在 bss segment 的 array，
 Load到memory中的只有到 `a[1007]`，之後就沒有load 進memory，因此沒有分配physical memory
@@ -731,7 +741,9 @@ int a[2000000] = {1};  // initialized variable, store in Data segment
 a[15352] = 1;     // occur page fault, load to phy_mem
 ```
 **執行結果:**  
-![image](https://hackmd.io/_uploads/SJhooBsWJl.png)
+![image](https://hackmd.io/_uploads/rJpraR8G1g.png)
+
+
 
 可以看到 load 到`a[16375]`結束，而`a[16376]`尚未存取，
 因此可得：
@@ -756,7 +768,8 @@ for(int i=0; i<2000000; i++)
 }
 ```
 **執行結果:**  
-![image](https://hackmd.io/_uploads/B1CRwyBg1g.png)
+![image](https://hackmd.io/_uploads/SkmvTA8zyl.png)
+
 
 In this particular case，不管是定義在Data segment or BSS segment，透過迴圈存取每個element，會造成page fault 並強迫load into memory，因此陣列中每個element 都有分配到各自的physical address
 
@@ -778,7 +791,8 @@ int a[100] = {1};  // Data segment
 **<font color = "#0000ff"><font size = 4>What is `mm_struct`?</font></font>**
 
 task_struct 被稱為 process descriptor，因為其記錄了這個 process所有的context(ex: PID, scheduling info)，其中有一個被稱為 memory descriptor的結構 `mm_struct`，記錄了Linux視角下管理process address的資訊(ex: page tables)。  
-![30528e172c325228bf23dec7772f0c73](https://hackmd.io/_uploads/SkgMiSY1Jg.png)  
+![image](https://hackmd.io/_uploads/HkYu6RLG1e.png)
+  
 圖源: [Linux源码解析-内存描述符（mm_struct）](https://blog.csdn.net/tiankong_/article/details/75676131)
 
 因此 `struct mm_struct *mm = current->mm;` 指的是存取目前process的memory management 資訊 
@@ -804,8 +818,7 @@ By assigning `current->mm` to this pointer, now can access to the memory-related
 
 ## <font color=" #008000">SYSCALL_DEFINE</font>
 
-**<font size = 4>What is `SYSCALL_DEFINE2`?</font>**
-根據 [bootlin](https://elixir.bootlin.com/linux/v5.15.137/source/include/linux/syscalls.h#L217)定義:
+**<font size = 4>What is `SYSCALL_DEFINE2`?</font>**根據 [bootlin](https://elixir.bootlin.com/linux/v5.15.137/source/include/linux/syscalls.h#L217)定義:
 
 ```c
 #define SYSCALL_DEFINE1(name, ...) SYSCALL_DEFINEx(1, _##name, __VA_ARGS__)
@@ -835,71 +848,51 @@ asmlinkage long sys_my_get_physical_addresses(void *ptr);
 * `__VA_ARGS__` 代表傳入的參數
 
 
-## <font color= "#008000">How does the kernel set register `cr3`</font>
+## <font color = "#008000">How does the kernel set register `cr3`</font>
+
 refrence: [stackoverflow](https://stackoverflow.com/questions/45239165/how-does-the-kernel-set-register-cr3)
 
-
-Stackoverflow Reply:
-
-    the page tables are found in kernel address space and the kernel keeps a close track of the virtual->physical mapping there.
+```
+the page tables are found in kernel address space and the kernel keeps a close track of the virtual->physical mapping there.
 
 
-    Linux differentiates between two types of virtual addresses in the kernel:
+Linux differentiates between two types of virtual addresses in the kernel:
 
-    Kernel virtual addresses - which can map (conceptually) to any physical address; and
+Kernel virtual addresses - which can map (conceptually) to any physical address; and
 
-    Kernel logical addresses - which are virtual addresses that have a linear mapping to physical addresses
+Kernel logical addresses - which are virtual addresses that have a linear mapping to physical addresses
 
 
 
-    The kernel places the page tables in logical addresses, so you only need to focus on those for this discussion.
+The kernel places the page tables in logical addresses, so you only need to focus on those for this discussion.
 
-    Mapping a logical address to its corresponding physical one requires only the subtraction of a constant (see e.g. the __pa macro in the Linux source code).
+Mapping a logical address to its corresponding physical one requires only the subtraction of a constant (see e.g. the __pa macro in the Linux source code).
 
-    For example, on x86, physical address 0 corresponds to logical address 0xC0000000, and physical address 0x8000 corresponds to logical address 0xC0008000.
+For example, on x86, physical address 0 corresponds to logical address 0xC0000000, and physical address 0x8000 corresponds to logical address 0xC0008000.
 
-    So once the kernel places the page tables in a particular logical address, it can easily calculate which physical address it corresponds to.
+So once the kernel places the page tables in a particular logical address, it can easily calculate which physical address it corresponds to.
 
-
-
+```
 
 kernel有兩種虛擬記憶體機制:Kernel virtual addresses與Kernel logical addresses，page table存放區域使用的是Kernel logical addresses機制(簡單的偏移量關係可以實現更快速的虛擬位置實體位置轉換)。
 
-
-透過bootlin trace code:
-轉換kernel logical address至physical address是透過__pa()
+透過bootlin trace code: 轉換kernel logical address至physical address是透過__pa()
 
 
 `/ arch / x86 / include / asm / page.h`
 
-![image](https://hackmd.io/_uploads/B1vQtMR-Jg.png)
-
-
+![image](https://hackmd.io/_uploads/H1jVCRIzke.png)
 繼續進行trace code
-
-![image](https://hackmd.io/_uploads/S1QEKfCWJe.png)
-
-
+![image](https://hackmd.io/_uploads/SJUICR8fyl.png)
 page_32.h中
+![image](https://hackmd.io/_uploads/rkCUC0UfJg.png)
 
-![image](https://hackmd.io/_uploads/SyBBKG0bJx.png)
-
-
-在32位元中__pa()透過將physical address減去PAGE_OFFSET 
-
+在32位元中__pa()透過將physical address減去PAGE_OFFSET
 
 page_64.h中
+![image](https://hackmd.io/_uploads/SkZd0ALzJg.png)
 
-![image](https://hackmd.io/_uploads/rJkIYfA-ke.png)
-
-
-
-![image](https://hackmd.io/_uploads/Hy48YGAWkg.png)
-
-
-
-
-
+![image](https://hackmd.io/_uploads/B1ddA0UzJg.png)
 當 x < y 時，這表示 x 是一個低於內核映射起始地址的虛擬地址。這種情況下，y 會是一個負值（在無符號長整型中，這會導致進位）。為了計算出正確的物理地址，我們需要將 (__START_KERNEL_map - PAGE_OFFSET) 加到 y 上。
 
 __START_KERNEL_map 是內核映射的起始地址，而 PAGE_OFFSET 是內核虛擬地址空間的偏移量。通過將 (__START_KERNEL_map - PAGE_OFFSET) 加到 y 上，我們可以得到一個正確的物理地址，這樣可以確保計算出的物理地址是正確的。
@@ -907,29 +900,25 @@ __START_KERNEL_map 是內核映射的起始地址，而 PAGE_OFFSET 是內核虛
 撰寫x = y + (__START_KERNEL_map - PAGE_OFFSET);是為了讓系統可以兼容使用PAGE_OFFSET機制而不是__START_KERNEL_map機制來轉換virtual address的程式
 
 
-
 ## <font color= "#008000">`CR2`暫存器作用?</font>
-
 CR2 暫存器的作用：
 
-在x86架構下，當發生頁錯（page fault）時，處理器會自動將導致頁錯的虛擬地址寫入 cr2 暫存器。這個虛擬地址就是系統試圖存取但未映射到物理內存的地址。
-Page Fault 處理流程：
+在x86架構下，當發生頁錯（page fault）時，處理器會自動將導致頁錯的虛擬地址寫入 cr2 暫存器。這個虛擬地址就是系統試圖存取但未映射到物理內存的地址。 Page Fault 處理流程：
 
-當頁表條目（page table entry，PTE）中的 present 位（flag）為 0 時，表示該頁未映射到物理內存，因此會觸發頁錯中斷（page fault）。
-頁錯處理程式（page fault handler）會讀取 cr2 中的虛擬地址，從而知道是哪個地址引發了頁錯。
-內核在頁錯處理過程中可能會在物理內存中找到一個可用的頁框，然後從磁碟（或其他二級存儲）將需要的頁面內容載入到這個頁框中。
-最後，內核使用 cr2 中的虛擬地址來更新相應的頁表條目，使該虛擬地址映射到剛載入的物理頁框，並將 present 標誌設為 1，以便未來的訪問不會再觸發頁錯。
+當頁表條目（page table entry，PTE）中的 present 位（flag）為 0 時，表示該頁未映射到物理內存，因此會觸發頁錯中斷（page fault）。 頁錯處理程式（page fault handler）會讀取 cr2 中的虛擬地址，從而知道是哪個地址引發了頁錯。 內核在頁錯處理過程中可能會在物理內存中找到一個可用的頁框，然後從磁碟（或其他二級存儲）將需要的頁面內容載入到這個頁框中。 最後，內核使用 cr2 中的虛擬地址來更新相應的頁表條目，使該虛擬地址映射到剛載入的物理頁框，並將 present 標誌設為 1，以便未來的訪問不會再觸發頁錯。
 
 # <font color="#F7A004">Problems</font>
 
 ## <font color="#008000">physical_memory範圍</font>
 假設我們給予8GB 記憶體空間，那麼8GB = 8,589,934,592 Bytes = 0x2 0000 0000   
 因此最高能分配到的記憶體位置為 0x1 FFFF FFFF  
-![image](https://hackmd.io/_uploads/rJlIAySe1l.png)
+![image](https://hackmd.io/_uploads/HkbhRRUMkx.png)
+
 
 以上圖為例，physical address 明顯超出記憶體範圍，原因如下圖所述，並不是所有的bit都為實體記憶體位址，前面0x8000...都是NX bit或是其他功能，所以必須在計算physical address時使用`PTE_PFN_MASK`過濾掉第52 bits以上及後面12 bits，得到的才是實際physical frame number，加上offset 才會是physical address  
 
-![image](https://hackmd.io/_uploads/r1iZv-IWJe.png)
+![image](https://hackmd.io/_uploads/r1920AUMJe.png)
+
 
 
 
