@@ -1,6 +1,7 @@
 # <font color="#F7A004">Intro</font>
 
 **<font size = 4>2024 Fall NCU Linux OS Project 1</font>**  
+第40組 組員：113522053蔡尚融(kjmse716) , 113522008 陳國誌(gary7102) , 李秉叡
 
 
 * Add a system call that get physical addresses from virtual addresses
@@ -8,7 +9,7 @@
 * 使用Copy on Write 機制來驗證system call 正確呼叫  
 * 介紹 Demand Paging 在 memory 中的使用時機  
 
-Demo問題可參考[這篇](https://hackmd.io/@gary7102/ByQDR51M1e)，[github](https://github.com/gary7102/Linux-add-a-system-call.git)，好讀版[hackmd](https://hackmd.io/@gary7102/BkMu4HKk1l)
+[hackmd](https://hackmd.io/@gary7102/BkMu4HKk1l)
 
 **<font size = 4>Environment</font>**
 ```
